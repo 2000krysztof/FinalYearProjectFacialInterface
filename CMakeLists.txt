@@ -18,7 +18,7 @@ add_executable(FacialInterface ${SOURCES})
 
 target_compile_features(FacialInterface PRIVATE cxx_std_17)
 
-target_link_libraries(FacialInterface PRIVATE raylib)
+target_link_libraries(FacialInterface PRIVATE raylib websockets)
 
 if (WIN32 AND BUILD_SHARED_LIBS)
 	add_custom_command(TARGET FacialInterface POST_BUILD

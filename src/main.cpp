@@ -1,14 +1,21 @@
+#include "eventQueue.h"
 #include "raylib.h"
 #include "facialInterface.h"
+#include "server.h"
+#include <libwebsockets.h>
+#include <threads.h>
 
 Camera3D initializeCamer();
 
 
 int main(){
+	EventQueue eventQueue = EventQueue();
+	Server server = Server(8080, &eventQueue);
+	server.run();
 
 	InitWindow(800, 600, "Facial Interface");
     SetTargetFPS(60);
-
+	SetTraceLogLevel(LOG_NONE);
 
 	Shader shader = LoadShader("res/shader.vert", "res/shader.frag");
 	FacialInterface facialInterface = FacialInterface("res/FaceModel.glb", shader, 5);
@@ -20,6 +27,7 @@ int main(){
 		facialInterface.Draw(cam);
     }
 
+	server.stop();
     CloseWindow();
     return 0;
 }
