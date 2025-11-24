@@ -3,17 +3,45 @@
 #include <string>
 
 
+static std::vector<float> NormalizeVector(const std::vector<float>& v);
+static void LerpInPlace(std::vector<float>& current, const std::vector<float>& target, float t);
+
 FacialInterface::FacialInterface(std::string modelPath, Shader shader, int animCount){
 	faceModel = LoadModel(modelPath.c_str());
 	faceModel.materials[0].shader = shader;
 	anims = LoadModelAnimations("res/FaceModel.glb", &animCount);
+
+	animationWeights = std::vector<float>();
+	animationWeights.assign(anims->frameCount, 0.0f);
+	animationWeights[0] = 1.0f;
+
+	targetWeights = std::vector<float>();
+	targetWeights.assign(anims->frameCount, 0.0f);
+	targetWeights[0] = 1.0f;
+
+	std::cout<< "frame count" << anims->frameCount <<std::endl;
 }
 
 FacialInterface::~FacialInterface(){}
 
 
 void FacialInterface::Update(){
-	//UpdateModelAnimation(faceModel, generateInBetween(anims,animIndex, animIndex+1,blend), 0);
+	UpdateModelAnimation(faceModel, BlendByVector(anims, animationWeights),0);
+	LerpInPlace(animationWeights, targetWeights,GetFrameTime());
+}
+
+void FacialInterface::UpdateWeights(std::vector<float> weights){
+    std::vector<float> temp;
+    temp.reserve(weights.size());
+
+    for (size_t i = 0; i < weights.size() && (i * 2) < targetWeights.size(); i++) {
+        temp.push_back(weights[i]);
+    }
+    temp = NormalizeVector(temp);
+
+    for (size_t i = 0; i < temp.size(); i++) {
+        targetWeights[i * 2] = temp[i];
+    }
 }
 
 void FacialInterface::Draw(Camera3D& cam){
@@ -97,4 +125,28 @@ ModelAnimation FacialInterface::BlendByVector(ModelAnimation* anims, const std::
     }
     
     return tweenAnim;
+}
+
+static std::vector<float> NormalizeVector(const std::vector<float>& v) {
+    float sum = 0.0f;
+    for (float x : v) sum += x;
+
+    if (sum == 0.0f) 
+        return v;
+
+    std::vector<float> out;
+    out.reserve(v.size());
+
+    for (float x : v) 
+        out.push_back(x / sum);
+
+    return out;
+}
+
+
+static void LerpInPlace(std::vector<float>& current, const std::vector<float>& target, float t) {
+    size_t n = current.size();
+    for (size_t i = 0; i < n; i++) {
+        current[i] = current[i] + (target[i] - current[i]) * t;
+    }
 }

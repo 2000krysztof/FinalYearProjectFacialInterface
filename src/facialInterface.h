@@ -11,9 +11,11 @@ public:
 	static ModelAnimation BlendByVector(ModelAnimation* anims, const std::vector<float>& v);
 	void Update();
 	void Draw(Camera3D& cam);
-
+	void UpdateWeights(std::vector<float> weights);
 
 private:
 	Model faceModel;	
 	ModelAnimation* anims;
+	std::vector<float> animationWeights;
+	std::vector<float> targetWeights;
 };

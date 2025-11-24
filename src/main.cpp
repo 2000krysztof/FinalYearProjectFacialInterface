@@ -2,11 +2,16 @@
 #include "raylib.h"
 #include "facialInterface.h"
 #include "server.h"
+#include <iostream>
 #include <libwebsockets.h>
 #include <threads.h>
+#include <json.hpp>
+
+using json = nlohmann::json;
 
 Camera3D initializeCamer();
 
+std::vector<float> JsonToVector(const std::string& jsonStr, const std::vector<std::string>& keys);
 
 int main(){
 	EventQueue eventQueue = EventQueue();
@@ -22,8 +27,15 @@ int main(){
 
 	Camera3D cam = initializeCamer();
 
+	std::string out;
+	std::vector<std::string> keys = {"happy", "angry", "sad", "surprised"};
 
     while (!WindowShouldClose()) {
+		if(eventQueue.pop(out)){
+			std::vector<float> weights = JsonToVector(out, keys);
+			facialInterface.UpdateWeights(weights);
+		}
+		facialInterface.Update();
 		facialInterface.Draw(cam);
     }
 
@@ -40,4 +52,24 @@ Camera3D initializeCamer(){
     cam.fovy     = 45.0f;
     cam.projection = CAMERA_PERSPECTIVE;
 	return cam;
+}
+
+std::vector<float> JsonToVector(const std::string& jsonStr, const std::vector<std::string>& keys)
+{
+    std::vector<float> v;
+    try {
+        auto j = json::parse(jsonStr);
+
+        for (const auto& key : keys) {
+            if (j.contains(key)) {
+                v.push_back(j[key].get<float>());
+            } else {
+                v.push_back(0.0f);
+            }
+        }
+    } catch (json::parse_error& e) {
+        std::cerr << "JSON parse error: " << e.what() << std::endl;
+    }
+
+    return v;
 }
