@@ -19,7 +19,6 @@ FacialInterface::FacialInterface(std::string modelPath, Shader shader, int animC
 	targetWeights.assign(anims->frameCount, 0.0f);
 	targetWeights[0] = 1.0f;
 
-	std::cout<< "frame count" << anims->frameCount <<std::endl;
 }
 
 FacialInterface::~FacialInterface(){}
@@ -28,6 +27,7 @@ FacialInterface::~FacialInterface(){}
 void FacialInterface::Update(){
 	UpdateModelAnimation(faceModel, BlendByVector(anims, animationWeights),0);
 	LerpInPlace(animationWeights, targetWeights,GetFrameTime());
+	PlayTimeline();
 }
 
 void FacialInterface::UpdateWeights(std::vector<float> weights){
@@ -55,6 +55,60 @@ void FacialInterface::Draw(Camera3D& cam){
 
 }
 
+
+void FacialInterface::PlayTimeline()
+{
+    if (timeline.empty()) return;
+    float dt = GetFrameTime();
+    playbackTime += dt;
+
+    while (currentIndex < timeline.size() &&
+           playbackTime > timeline[currentIndex].end){
+
+		std::cout << timeline[currentIndex].emotion << std::endl;
+        currentIndex++;
+    }
+
+    if (currentIndex >= timeline.size()){
+        playing = false;
+        return;
+    }
+
+    playing = true;
+
+    const std::string& emotion = timeline[currentIndex].emotion;
+
+    std::vector<float> weights = EmotionToWeights(emotion);
+
+    for (size_t i = 0; i < weights.size() && i < animationWeights.size(); i++){
+        targetWeights[i] = weights[i];
+    }
+
+    float t = 5.0f * dt;
+    for (size_t i = 0; i < animationWeights.size(); i++){
+        animationWeights[i] += (targetWeights[i] - animationWeights[i]) * t;
+    }
+
+}
+
+std::vector<float> FacialInterface::EmotionToWeights(const std::string& emotion) {
+    int total = anims->frameCount;
+    std::vector<float> weights(total, 0.0f);
+    
+    if (emotion == "happy")     weights[0] = 1.0f;
+    if (emotion == "sad")       weights[1] = 1.0f;
+    if (emotion == "surprised") weights[2] = 1.0f;
+    if (emotion == "angry")     weights[3] = 1.0f;
+    
+    if (weights == std::vector<float>(total, 0.0f)) weights[0] = 1.0f;
+    
+    return weights;
+}
+
+void FacialInterface::SetTimeline(std::vector<EmotionSegment> timeline){
+	this->timeline = timeline;
+	this->playbackTime = 0;
+}
 
 ModelAnimation FacialInterface::GenerateInBetween(ModelAnimation* anims, int index1, int index2, float t) {
 
