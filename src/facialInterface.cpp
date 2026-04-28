@@ -96,11 +96,13 @@ std::vector<float> FacialInterface::EmotionToWeights(const std::string& emotion)
     std::vector<float> weights(total, 0.0f);
     
     if (emotion == "happy")     weights[0] = 1.0f;
-    if (emotion == "sad")       weights[1] = 1.0f;
-    if (emotion == "surprised") weights[2] = 1.0f;
-    if (emotion == "angry")     weights[3] = 1.0f;
+    if (emotion == "angry")     weights[2] = 1.0f;
+    if (emotion == "sad")       weights[4] = 1.0f;
+    if (emotion == "surprised") weights[6] = 1.0f;
     
-    if (weights == std::vector<float>(total, 0.0f)) weights[0] = 1.0f;
+    bool anySet = false;
+    for (float w : weights) if (w > 0) anySet = true;
+    if (!anySet) weights[0] = 1.0f;
     
     return weights;
 }
