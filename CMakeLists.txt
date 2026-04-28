@@ -13,7 +13,7 @@ file(GLOB SOURCES src/*.cpp src/*.h)
 add_executable(FacialInterface ${SOURCES})  # target created here first
 
 target_compile_features(FacialInterface PRIVATE cxx_std_17)
-target_link_libraries(FacialInterface PRIVATE raylib websockets)
+target_link_libraries(FacialInterface PRIVATE raylib)
 target_include_directories(FacialInterface PRIVATE  # now this works
     ${PROJECT_SOURCE_DIR}/include
     ${raylib_SOURCE_DIR}/src/external
