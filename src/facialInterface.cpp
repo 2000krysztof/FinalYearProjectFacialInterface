@@ -108,8 +108,10 @@ std::vector<float> FacialInterface::EmotionToWeights(const std::string& emotion)
 }
 
 void FacialInterface::SetTimeline(std::vector<EmotionSegment> timeline){
-	this->timeline = timeline;
-	this->playbackTime = 0;
+    this->timeline = timeline;
+    this->playbackTime = 0;
+    this->currentIndex = 0;  
+    this->playing = true;
 }
 
 ModelAnimation FacialInterface::GenerateInBetween(ModelAnimation* anims, int index1, int index2, float t) {

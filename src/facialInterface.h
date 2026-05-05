@@ -16,6 +16,8 @@ public:
 	~FacialInterface();
 	static ModelAnimation GenerateInBetween(ModelAnimation* anims, int index1, int index2, float t);
 	static ModelAnimation BlendByVector(ModelAnimation* anims, const std::vector<float>& v);
+
+	bool IsPlaying() const { return playing; }
 	void Update();
 	void Draw(Camera3D& cam);
 	void UpdateWeights(std::vector<float> weights);

@@ -110,7 +110,6 @@ void SendToBun(const std::vector<short> audioBuffer) {
     if (auto res = cli.Post("/process-voice", items)) {
         auto data = nlohmann::json::parse(res->body);
 
-        // Parse timeline
         std::vector<EmotionSegment> timeline;
         for (auto& ts : data["timestamps"]) {
             EmotionSegment seg;
@@ -124,7 +123,6 @@ void SendToBun(const std::vector<short> audioBuffer) {
             timelineQueue.push(timeline);
         }
 
-        // Parse and queue audio
         std::string base64Audio = data["audio"];
         std::string audioBytes = base64_decode(base64Audio);
         std::vector<unsigned char> audioData(audioBytes.begin(), audioBytes.end());
@@ -182,7 +180,7 @@ int main(){
 		}
 		{
 			std::lock_guard<std::mutex> lock(timelineMutex);
-			while (!timelineQueue.empty()) {
+			if (!timelineQueue.empty() && !facialInterface.IsPlaying()) {
 				facialInterface.SetTimeline(timelineQueue.front());
 				timelineQueue.pop();
 			}
