@@ -194,15 +194,17 @@ int main(){
 				recordingBuffer.clear();
 				std::cout << "Recording started..." << std::endl;
 			} else {
-				if (!recordingBuffer.empty()) {
-					std::vector<short> clonedBuffer = recordingBuffer;
+				std::vector<short> clonedBuffer;
+				{
+					std::lock_guard<std::mutex> lock(bufferMutex);
+					clonedBuffer = std::move(recordingBuffer);
+					recordingBuffer.clear();
+				}
 
+				if (!clonedBuffer.empty()) {
 					std::cout << "Sending clone: " << clonedBuffer.size() << " samples." << std::endl;
-
 					std::thread t(SendToBun, std::move(clonedBuffer));
 					t.detach();
-
-					recordingBuffer.clear();
 				}
 			}
 		}
