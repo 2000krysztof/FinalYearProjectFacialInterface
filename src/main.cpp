@@ -1,141 +1,22 @@
 #include "raylib.h"
 #include "miniaudio.h" 
 #include "facialInterface.h"
+#include "audio.h"
+#include "network.h"
+#include "utils.h"
 #include <iostream>
-#include <threads.h>
+#include <thread>
 #include <json.hpp>
 #include <httplib.h>
 #include <queue>
+#include <mutex>
 
 using json = nlohmann::json;
-
-Camera3D initializeCamer();
-
-std::vector<float> JsonToVector(const std::string& jsonStr, const std::vector<std::string>& keys);
-
-std::vector<short> recordingBuffer;
-bool isRecording = false;
-std::mutex bufferMutex;
 
 std::queue<std::vector<unsigned char>> audioQueue;
 std::mutex audioMutex;
 std::queue<std::vector<EmotionSegment>> timelineQueue;
 std::mutex timelineMutex;
-
-void CaptureCallback(ma_device* device, void* output, const void* input, ma_uint32 frameCount) {
-    if (!isRecording) return;
-    const short* samples = (const short*)input;
-    std::lock_guard<std::mutex> lock(bufferMutex);
-    for (ma_uint32 i = 0; i < frameCount; i++) {
-        recordingBuffer.push_back(samples[i]);
-    }
-}
-
-void TrimSilence(std::vector<short>& buffer, short threshold = 800) {
-    auto start = buffer.begin();
-    while (start != buffer.end() && std::abs(*start) < threshold) {
-        start++;
-    }
-
-    auto end = buffer.end();
-    while (end != start && std::abs(*(end - 1)) < threshold) {
-        end--;
-    }
-
-    if (start != buffer.begin()) buffer.erase(buffer.begin(), start);
-    if (end != buffer.end()) buffer.erase(end, buffer.end());
-}
-
-std::string VectorToBytes(const std::vector<short>& buffer) {
-    return std::string(reinterpret_cast<const char*>(buffer.data()), 
-                       buffer.size() * sizeof(short));
-}
-static const std::string base64_chars =
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-inline std::string base64_decode(const std::string& encoded) {
-    std::string decoded;
-    int i = 0;
-    unsigned char char_array_4[4], char_array_3[3];
-    int in_len = encoded.size();
-    int idx = 0;
-
-    while (in_len-- && encoded[idx] != '=' && 
-           (isalnum(encoded[idx]) || encoded[idx] == '+' || encoded[idx] == '/')) {
-        char_array_4[i++] = encoded[idx++];
-        if (i == 4) {
-            for (i = 0; i < 4; i++)
-                char_array_4[i] = base64_chars.find(char_array_4[i]);
-            char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-            char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-            char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
-            for (i = 0; i < 3; i++) decoded += char_array_3[i];
-            i = 0;
-        }
-    }
-
-    if (i) {
-        for (int j = i; j < 4; j++) char_array_4[j] = 0;
-        for (int j = 0; j < 4; j++)
-            char_array_4[j] = base64_chars.find(char_array_4[j]);
-        char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
-        char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-        char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
-        for (int j = 0; j < i - 1; j++) decoded += char_array_3[j];
-    }
-
-    return decoded;
-}
-
-void SendToBun(const std::vector<short> audioBuffer) {
-    std::string rawData(reinterpret_cast<const char*>(audioBuffer.data()), 
-                        audioBuffer.size() * sizeof(short));
-
-    httplib::Client cli("http://178.104.153.198:30080");
-    cli.set_connection_timeout(30);
-    cli.set_read_timeout(60);
-    cli.set_write_timeout(60);
-
-    httplib::UploadFormData item;
-    item.name = "audio";
-    item.content = rawData;
-    item.filename = "input.pcm";
-    item.content_type = "application/octet-stream";
-
-    std::vector<httplib::UploadFormData> items;
-    items.push_back(item);
-
-    std::cout << "Sending " << rawData.size() << " bytes to server..." << std::endl;
-
-    if (auto res = cli.Post("/process-voice", items)) {
-        auto data = nlohmann::json::parse(res->body);
-
-        std::vector<EmotionSegment> timeline;
-        for (auto& ts : data["timestamps"]) {
-            EmotionSegment seg;
-            seg.emotion = ts["tag"].get<std::string>();
-            seg.start   = ts["start"].get<float>();
-            seg.end     = ts["end"].get<float>();
-            timeline.push_back(seg);
-        }
-        {
-            std::lock_guard<std::mutex> lock(timelineMutex);
-            timelineQueue.push(timeline);
-        }
-
-        std::string base64Audio = data["audio"];
-        std::string audioBytes = base64_decode(base64Audio);
-        std::vector<unsigned char> audioData(audioBytes.begin(), audioBytes.end());
-        std::cout << "Pushing audio bytes: " << audioData.size() << std::endl;
-        {
-            std::lock_guard<std::mutex> lock(audioMutex);
-            audioQueue.push(audioData);
-            std::cout << "Queue size after push: " << audioQueue.size() << std::endl;
-        }
-    } else {
-        std::cerr << "Connection error: " << httplib::to_string(res.error()) << std::endl;
-    }
-}
 
 int main(){
 
@@ -201,7 +82,7 @@ int main(){
 
 				if (!clonedBuffer.empty()) {
 					std::cout << "Sending clone: " << clonedBuffer.size() << " samples." << std::endl;
-					std::thread t(SendToBun, std::move(clonedBuffer));
+					std::thread t(SendToBun, std::move(clonedBuffer), std::ref(timelineQueue), std::ref(timelineMutex), std::ref(audioQueue), std::ref(audioMutex));
 					t.detach();
 				}
 			}
@@ -215,34 +96,4 @@ int main(){
     CloseAudioDevice();
     CloseWindow();
     return 0;
-}
-
-Camera3D initializeCamer(){
-    Camera3D cam = { 0 };
-    cam.position = { 0.0f, 0.1f, 1.0f };
-    cam.target   = { 0.0f, 0.1f, 0.0f };
-    cam.up       = { 0.0f, 1.0f, 0.0f };
-    cam.fovy     = 45.0f;
-    cam.projection = CAMERA_PERSPECTIVE;
-	return cam;
-}
-
-std::vector<float> JsonToVector(const std::string& jsonStr, const std::vector<std::string>& keys)
-{
-    std::vector<float> v;
-    try {
-        auto j = json::parse(jsonStr);
-
-        for (const auto& key : keys) {
-            if (j.contains(key)) {
-                v.push_back(j[key].get<float>());
-            } else {
-                v.push_back(0.0f);
-            }
-        }
-    } catch (json::parse_error& e) {
-        std::cerr << "JSON parse error: " << e.what() << std::endl;
-    }
-
-    return v;
 }
